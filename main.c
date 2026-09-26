@@ -2,6 +2,7 @@
 #include <string.h>
 #include "pico/stdlib.h"
 #include "motor_controller.h"
+#include "ir_sensor.h"
 #include "wifi_log.h"
 
 // Motor pin assignments for the Robo Pico's built-in motor driver terminals. 
@@ -43,6 +44,12 @@
 #define LOG_SERVER_PORT 4210
 #endif
 
+// Set to 1 to run the motor/encoder demo instead of line following.
+#define RUN_MOTOR_DEMO 0
+
+// Drives through forward/backward/turn/spin moves forever, printing encoder readings.
+static void run_motor_demo(MotorController *mc);
+
 int main() {
     stdio_init_all();
 
@@ -64,65 +71,78 @@ int main() {
                        MOTOR1_ENCODER_A_PIN, MOTOR1_ENCODER_B_PIN,
                        MOTOR2_ENCODER_A_PIN, MOTOR2_ENCODER_B_PIN);
     mc_set_wheel_geometry(&motors, WHEEL_DIAMETER_MM, MOTOR_DEFAULT_PULSES_PER_WHEEL_REV);
-    
-    sleep_ms(2000);
 
+    ir_init();
+
+    sleep_ms(3000); // time to open the Serial Monitor and place the robot on the line
+
+#if RUN_MOTOR_DEMO
+    run_motor_demo(&motors);
+#else
+    printf("Starting line following + barcode scanning\n");
+    while (true) {
+        ir_update(&motors);
+    }
+#endif
+}
+
+static void run_motor_demo(MotorController *mc) {
     while (true) {
         printf("Forward\n");
-        mc_forward(&motors, 50);
+        mc_forward(mc, 50);
         sleep_ms(2000);
-        mc_stop(&motors);
+        mc_stop(mc);
         printf("Pulses -> M1: %d  M2: %d  |  Distance(mm) -> M1: %.1f  M2: %.1f  |  Speed(mm/s) -> M1: %.1f  M2: %.1f\n",
-               mc_get_motor1_pulses(&motors), mc_get_motor2_pulses(&motors),
-               mc_get_motor1_distance_mm(&motors), mc_get_motor2_distance_mm(&motors),
-               mc_get_motor1_speed_mm_s(&motors), mc_get_motor2_speed_mm_s(&motors));
+               mc_get_motor1_pulses(mc), mc_get_motor2_pulses(mc),
+               mc_get_motor1_distance_mm(mc), mc_get_motor2_distance_mm(mc),
+               mc_get_motor1_speed_mm_s(mc), mc_get_motor2_speed_mm_s(mc));
         sleep_ms(1000);
 
         printf("Backward\n");
-        mc_backward(&motors, 50);
+        mc_backward(mc, 50);
         sleep_ms(2000);
-        mc_stop(&motors);
+        mc_stop(mc);
         printf("Pulses -> M1: %d  M2: %d  |  Distance(mm) -> M1: %.1f  M2: %.1f  |  Speed(mm/s) -> M1: %.1f  M2: %.1f\n",
-               mc_get_motor1_pulses(&motors), mc_get_motor2_pulses(&motors),
-               mc_get_motor1_distance_mm(&motors), mc_get_motor2_distance_mm(&motors),
-               mc_get_motor1_speed_mm_s(&motors), mc_get_motor2_speed_mm_s(&motors));
+               mc_get_motor1_pulses(mc), mc_get_motor2_pulses(mc),
+               mc_get_motor1_distance_mm(mc), mc_get_motor2_distance_mm(mc),
+               mc_get_motor1_speed_mm_s(mc), mc_get_motor2_speed_mm_s(mc));
         printf("Wi-Fi log dropped lines so far: %u\n", wifi_log_get_dropped_count());
         sleep_ms(1000);
 
         printf("Pivot gentle turn left\n");
-        mc_turn_left(&motors, 50, 30); // sharpness 30 = gentle turn
+        mc_turn_left(mc, 50, 30); // sharpness 30 = gentle turn
         sleep_ms(1000);
-        mc_stop(&motors);
+        mc_stop(mc);
         sleep_ms(1000);
         
         printf("Pivot gentle turn right\n");
-        mc_turn_right(&motors, 50, 30); // sharpness 30 = gentle turn
+        mc_turn_right(mc, 50, 30); // sharpness 30 = gentle turn
         sleep_ms(1000);
-        mc_stop(&motors);
+        mc_stop(mc);
         sleep_ms(1000);
 
         printf("Spin left\n");
-        mc_spin_left(&motors, 50);
+        mc_spin_left(mc, 50);
         sleep_ms(1000);
-        mc_stop(&motors);
+        mc_stop(mc);
         sleep_ms(1000);
 
         printf("Spin right\n");
-        mc_spin_right(&motors, 50);
+        mc_spin_right(mc, 50);
         sleep_ms(1000);
-        mc_stop(&motors);
+        mc_stop(mc);
         sleep_ms(1000);
 
         printf("Pivot sharp turn left\n");
-        mc_turn_left(&motors, 50, 70); // sharpness 70 = sharp turn
+        mc_turn_left(mc, 50, 70); // sharpness 70 = sharp turn
         sleep_ms(1000);
-        mc_stop(&motors);
+        mc_stop(mc);
         sleep_ms(1000);
         
         printf("Pivot sharp turn right\n");
-        mc_turn_right(&motors, 50, 70); // sharpness 70 = sharp turn
+        mc_turn_right(mc, 50, 70); // sharpness 70 = sharp turn
         sleep_ms(1000);
-        mc_stop(&motors);
+        mc_stop(mc);
         sleep_ms(1000);
 
         sleep_ms(3000);

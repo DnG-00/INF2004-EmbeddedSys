@@ -46,6 +46,7 @@ pico_sdk_init()
 add_executable(RoboPico
         main.c
         motor_controller.c
+        ir_sensor.c
         wifi_log.c
         )
 
@@ -65,6 +66,7 @@ target_compile_definitions(RoboPico PRIVATE
 target_link_libraries(RoboPico
         pico_stdlib
         hardware_pwm
+        hardware_adc
         pico_cyw43_arch_lwip_threadsafe_background
         )
 
