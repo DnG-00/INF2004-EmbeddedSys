@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Line Tracker Project</title>
+    <link rel="stylesheet" href="../statics/css/style.css">
+    
+</head>
+<body>
+    <section class="topbar-section"> 
+        <div id="time-container"></div>
+
+        <div class="title-container">
+            <h3 class="title-text">AUTONOMOUS ROBOTIC CAR</h3>
+        </div>
+
+       <div class="connection-status-container">
+            <button type="button" class="connection-status-btn disabled" id="connection-status-btn">
+                <div class="circle-icon disabled" id="circle-icon"></div>
+                <div class="connection-status-text" id="connection-status-text">NOT CONNECTED</div>
+            </div>
+        </div>
+    </section>
+
+    <main class="dashboard-section">
+        <div class="ultrasonic-imu-container">
+                <div class="ultrasonic-section">
+                    <img src="../statics/images/Ultrasonic.png" alt="Ultrasonic-Sensor-Image">
+                    <div class="sensor-title-text">Ultrasonic Sensor + Servo Motor</div>
+                    <div class="data-collection-section">
+                        <div class="data-section">
+                            <div class="data-description-text">ANGLE:</div>
+                            <span class="data-value-text"><h4 id="angle-value">XX</h4>&deg;</span>
+                        </div>
+                        <div class="data-section">
+                            <div class="data-description-text">DISTANCE:</div>
+                            <span class="data-value-text"><h4 id="distance-value">XX</h4>CM AWAY FROM OBSTACLE</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="imu-section">
+                    <img src="../statics/images/IMU.jpg" alt="IMU-Image">
+                    <div class="sensor-title-text">IMU</div>
+                    <div class="data-collection-section">
+                        <div class="data-section">
+                            <div class="data-description-text">HEADING</div>
+                            <span class="data-value-text"><h4 id="heading-value">XX</h4>&deg;</span>
+                        </div>
+                        <div class="data-section">
+                            <div class="data-description-text">TILT</div>
+                            <span class="data-value-text"><h4 id="tilt-value">XX</h4>&deg;</span>
+                        </div>
+                        <div class="data-section">
+                            <div class="data-description-text">ACCELERATION</div>
+                            <span class="data-value-text"><h4 id="acceleration-value">XX</h4>MPH</span>
+                        </div>
+                    </div>
+                </div>
+        </div>
+
+        <div class="main-dashboard-container">
+            <div class="line-tracker-car-section">
+                <div class="car-image-wrapper">
+                    <svg class="flow-arrow arrow-top-left" viewBox="0 0 24 24" width="26" height="26">
+                        <path d="M5 12 H19 M12 5 L19 12 L12 19" fill="none" stroke="black" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+
+                    <svg class="flow-arrow arrow-top-right" viewBox="0 0 24 24" width="26" height="26">
+                        <path d="M5 12 H19 M12 5 L19 12 L12 19" fill="none" stroke="black" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+
+                    <svg class="flow-arrow arrow-bottom-left" viewBox="0 0 24 24" width="26" height="26">
+                        <path d="M5 12 H19 M12 5 L19 12 L12 19" fill="none" stroke="black" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+
+                    <svg class="flow-arrow arrow-bottom-right" viewBox="0 0 24 24" width="26" height="26">
+                        <path d="M5 12 H19 M12 5 L19 12 L12 19" fill="none" stroke="black" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+
+                    <img src="../statics/images/Line-Tracker-Car.jpg" alt="Line-Tracker-Car-Image" id="line-tracker-car-icon">
+                </div>
+                
+                <div class="description-section">
+                    <h2>LINE TRACKER CAR</h2>
+
+                    <div class="battery-wrapper">
+                        <svg class="battery-icon" viewBox="0 0 54 26" width="50" height="24">
+                            <rect x="2" y="3" width="45" height="20" rx="5" ry="5" fill="none" stroke="currentColor" stroke-width="3"></rect>
+                            <path d="M 49 9 L 49 17" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path>
+                            <rect id="battery-fill" x="6" y="7" width="37" height="12" rx="2" ry="2" fill="currentColor"></rect>
+                        </svg>
+                        <span id="battery-text">XX%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-buttons-section">
+                <button type="button" class="start-btn" id="start-btn">START</button>
+                <button type="button" class="stop-btn" id="stop-btn">STOP</button>
+            </div>
+        </div>
+
+        <div class="wheels-ir-container">
+            <div class="wheels-section">
+                <img src="../statics/images/Servo-Motor.jpg" alt="Servo-Motor-Image">
+                <div class="sensor-title-text">Wheels</div>
+                <div class="data-collection-section">
+                    <div class="data-section">
+                        <div class="data-description-text">FRONT LEFT:</div>
+                        <span class="data-value-text">
+                            <h4 id="front-left-value">XX</h4>
+                            <p>&deg;</p>
+                            <p id="front-left-direction"> clockwise/counterclowise</p>
+                        </span>
+                    </div>
+
+                    <div class="data-section">
+                        <div class="data-description-text">REAR LEFT:</div>
+                        <span class="data-value-text">
+                            <h4 id="rear-left-value">XX</h4>
+                            <p>&deg;</p>
+                            <p id="rear-left-direction"> clockwise/counterclowise</p>
+                        </span>
+                    </div>
+
+                    <div class="data-section">
+                        <div class="data-description-text">FRONT RIGHT:</div>
+                        <span class="data-value-text">
+                            <h4 id="front-right-value">XX</h4>
+                            <p>&deg;</p>
+                            <p id="front-right-direction"> clockwise/counterclowise</p>
+                        </span>
+                    </div>
+
+                    <div class="data-section">
+                        <div class="data-description-text">REAR RIGHT:</div>
+                        <span class="data-value-text">
+                            <h4 id="rear-right-value">XX</h4>
+                            <p id="rear-right-direction"> clockwise/counterclowise</p>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ir-section">
+                <img src="../statics/images/IR.png" alt="IR-Sensor-Image">
+                <div class="sensor-title-text">IR Sensor</div>
+                <div class="data-collection-section">
+                    <div class="ir-circle" id="ir-one"></div>
+                    <div class="ir-circle" id="ir-two"></div>
+                    <div class="ir-circle" id="ir-three"></div>
+                </div>
+
+                <div class="legends">
+                    <h5>Key:</h5>
+                    <div class="ir-description-container">
+                        <div class="ir-example-section">
+                            <div class="ir-circle disabled" id="ir-example-one"></div>
+                            <span class="ir-example-text">: LINE IS NOT DETECTED</span>
+                        </div>
+
+                        <div class="ir-example-section">
+                            <div class="ir-circle" id="ir-example-two"></div>
+                            <span class="ir-example-text">: LINE IS DETECTED</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+
+
+    <script src="../statics/js/script.js"></script>
+</body>
+</html>

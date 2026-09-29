@@ -1,0 +1,371 @@
+body {
+    background-color: whitesmoke;
+    margin: 0;
+    font-family: sans-serif;
+    overflow: hidden;
+}
+
+/* Topbar's CSS */
+.topbar-section {
+    position: fixed; 
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 70px;
+    background-color: #91b2eb;
+    border: 1px solid darkblue;
+    color: ivory;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    justify-content: space-between;
+    position: relative;
+    text-align: center;
+    box-sizing: border-box;
+    z-index: 1000; /* This is to keep the topbar above all the elements */
+}
+
+#time-container {
+    padding-left: 10px;
+    font-size: 1.25rem;
+}
+
+#time-container, .title-container {
+    pointer-events: none;
+}
+
+.title-text {
+    font-size: 1.8rem;
+    font-weight: bold;
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+main {
+    width: 100%;
+    height: calc(100vh - 70px);
+    margin-top: 70px; 
+    box-sizing: border-box;
+}
+
+.connection-status-btn {
+    width: fit-content;
+    height: fit-content;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    margin: 10px;
+    padding: 10px;
+    gap: 10px;
+    font-size: 1.05rem;
+    border-radius: 15px;
+    outline: none;
+    transition: background-color 0.3s, box-shadow 0.3s;
+}
+
+.circle-icon {
+    width: 10px;
+    height: 10px;
+    border-radius: 100%;
+    transition: background-color 0.3s, box-shadow 0.3s;
+}
+
+.connection-status-text {
+    color: white;
+}
+
+.connection-status-btn.disabled {
+    background-color: #dd6572;
+}
+
+.circle-icon.disabled {
+    background-color: red;
+}
+
+.connection-status-btn:not(.disabled) {
+    background-color: lightgreen;
+}
+
+.circle-icon:not(.disabled) {
+    background-color: #28a745;
+}
+
+/* Dashboard's CSS */
+.dashboard-section {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-evenly;
+    align-items: center;
+    margin: 0 auto;
+    padding: 0;
+}
+
+/* Sensors' CSS */
+.ultrasonic-section, .imu-section, .wheels-section, .ir-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.ultrasonic-imu-container, .wheels-ir-container {
+    display: flex;
+    flex-direction: column;     
+    align-items: center;        
+    gap: 20px;                  
+    width: 100%;
+}
+
+.ultrasonic-section img, .imu-section img, .wheels-section img, .ir-section img {
+    width: 250px;
+    height: 100px;
+    object-fit: fill;
+    border: 2px solid black;
+}
+
+.imu-section img, .ir-section img {
+    margin-top: 30px;
+}
+
+.sensor-title-text {
+    text-align: center;
+    font-size: 1.25rem;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.data-collection-section {
+    width: 305px;
+    height: auto;
+    padding: 15px 20px;
+    background-color: white;
+    border: 2px solid black;
+    border-radius: 15px;
+    display: grid;
+    grid-template-columns: 90px 1fr;
+    align-items: center;
+    gap: 15px 10px;
+}
+
+.data-section {
+    display: contents;
+}
+
+.data-description-text {
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: bold;
+}
+
+.data-value-text {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    font-size: 0.75rem;
+    gap: 4px;
+}
+
+.data-value-text h4, .data-value-text p {
+    margin: 0;
+    padding: 0;
+}
+
+/* Line Tracker Car's CSS */
+.main-dashboard-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    height: calc(100vh - 250px);
+
+}
+
+#line-tracker-car-icon {
+    width: 375px;
+    height: 275px;
+    object-fit: fill;
+    border: 2px solid black;
+}
+
+.description-section {
+    margin: 0 auto;
+    padding: 0;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-evenly;
+}
+
+.description-section h2 {
+    font-size: 1.25rem;
+}
+
+#battery-text {
+    font-size: 0.75rem;
+    font-weight: bold;
+}
+
+.battery-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: black; 
+}
+
+.battery-icon {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+#battery-fill {
+    transition: width 0.4s ease-in-out, fill 0.3s ease;
+}
+
+/* Start & Stop Buttons' CSS */
+.control-buttons-section {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-evenly;
+    gap: 25px;
+}
+
+.start-btn, .stop-btn {
+    font-size: 1.75rem;
+    width: 150px;
+    height: 50px;
+    color: white;
+    background-color: lightgrey;
+    font-weight: bold;
+    border-radius: 15px;
+    border: 2px solid lightgrey;
+    transition: background-color 0.3s, box-shadow 0.3s;
+}
+
+.start-btn.active {
+    background-color: lightgreen;
+}
+
+.stop-btn.active {
+    background-color: #dd6572;
+}
+
+/* Wheels' CSS */
+.wheels-section .data-collection-section {
+    grid-template-columns: 85px 1fr                  
+}
+
+.wheels-section .data-value-text {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.65rem;          
+    white-space: nowrap;         
+}
+
+.wheels-section .data-value-text p, .wheels-section .data-value-text h4 {
+    margin: 0;                       
+    padding: 0;
+}
+
+/* IR Sensor's CSS */
+.legends {
+    width: 305px;              
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;    
+    margin: 0 auto;             
+    text-align: left;
+}
+
+.legends h5 {
+    margin: 10px 0;
+}
+
+.ir-section .data-collection-section {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-around;
+}
+
+.ir-circle {
+    width: 30px;
+    height: 30px;
+    border-radius: 100%;
+    border: 2px solid black;
+    background-color: black;
+}
+
+.ir-circle.disabled {
+    background-color: white;
+}
+
+#ir-example-one, #ir-example-two {
+    width: 10px;
+    height: 10px;
+}
+
+.ir-description-container {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-around;
+    align-items: center;
+    width: 100%;
+}
+
+.ir-example-section {
+    display: flex;
+    flex-direction: row; 
+    align-items: center;
+    gap: 10px;
+}
+
+.ir-example-text {
+    font-size: 0.55rem;
+    white-space: nowrap;
+}
+
+/* Arrows' CSS */
+.car-image-wrapper {
+    position: relative;
+    width: 375px;
+    height: 275px;
+    margin: 30px auto;
+    overflow: visible;
+}
+
+.flow-arrow {
+    position: absolute;
+    z-index: 100;
+    width: 100px;
+    height: 45px;
+}
+
+.arrow-top-left {
+    top: 170px;
+    left: 460px;
+    transform: rotate(200deg);
+}
+
+.arrow-top-right {
+    top: 170px;
+    right: 470px;
+    transform: rotate(335deg);
+}
+
+.arrow-bottom-left {
+    bottom: 240px;
+    left: 460px;
+    transform: rotate(160deg);
+}
+
+.arrow-bottom-right {
+    bottom: 250px;
+    right: 470px;
+    transform: rotate(25deg);
+}

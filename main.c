@@ -3,6 +3,12 @@
 #include "pico/stdlib.h"
 #include "motor_controller.h"
 #include "wifi_log.h"
+#include "mqtt_client.h"
+
+#define MQTT_BROKER_IP  "192.168.1.27"
+
+#define ULTRASONIC_TRIG_PIN 16
+#define ULTRASONIC_ECHO_PIN 17
 
 // Motor pin assignments for the Robo Pico's built-in motor driver terminals. 
 // Change accordingly if motor wiring on the board are changed
@@ -47,11 +53,44 @@ int main() {
     stdio_init_all();
 
     // FOR TESTING PURPOSES ONLY, TO REPLACE LATER
-    if (strlen(WIFI_SSID) > 0) {
-        if (wifi_log_init(WIFI_SSID, WIFI_PASSWORD, LOG_SERVER_IP, LOG_SERVER_PORT)) {
-            printf("Wi-Fi log connected, sending to %s:%d\n", LOG_SERVER_IP, LOG_SERVER_PORT);
+    ultrasonic_init(ULTRASONIC_TRIG_PIN, ULTRASONIC_ECHO_PIN);
+
+    while (true) {
+        float distance = ultrasonic_read_cm();
+
+        if (distance < 0) {
+            printf("Ultrasonic timeout\n");
         } else {
-            printf("Wi-Fi log failed to connect, continuing on USB only\n");
+            printf("Distance: %.2f cm\n", distance);
+        }
+
+        sleep_ms(500);
+    }
+
+    if (strlen(WIFI_SSID) > 0) {
+        if (wifi_log_init(
+                WIFI_SSID,
+                WIFI_PASSWORD,
+                LOG_SERVER_IP,
+                LOG_SERVER_PORT)) {
+
+            printf("Wi-Fi connected\n");
+
+            sleep_ms(1000);
+
+            if (mqtt_init(MQTT_BROKER_IP)) {
+                printf("MQTT initialised\n");
+
+                // Give the MQTT connection time to complete.
+                sleep_ms(3000);
+
+                mqtt_publish_test();
+            } else {
+                printf("MQTT failed\n");
+            }
+
+        } else {
+            printf("Wi-Fi failed\n");
         }
     }
 
