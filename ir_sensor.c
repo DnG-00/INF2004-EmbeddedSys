@@ -3,7 +3,7 @@
 // Sensor wiring (confirmed with ir_sensor_test.c):
 //   Left   sensor DO -> GP3            (digital, 1 = black)
 //   Centre sensor AO -> GP27 (ADC1)    (analog, ~200 white / ~2500 black)
-//   Right  sensor AO -> GP28 (ADC2)    (analog, barcode scanner)
+//   Right  sensor AO -> GP28 (ADC2)    (analog, barcode scanner, Grove port 7)
 //
 // Line following: EDGE FOLLOWING with a PD controller.
 //   The centre sensor's analog reading is turned into a position 0..1
@@ -24,7 +24,10 @@
 // robot has reached the edge of the mat and sees the dark floor/bed), it stops
 // and prints "OFF TRACK". Once stopped, put it back on the line to carry on.
 //
-// Decoded barcodes are printed on the Serial Monitor.
+// Barcodes: Code 39 (e.g. *A*, *Z*), printed 141 mm long with 3 mm narrow and
+// 9 mm wide bars, placed 20 mm beside the line. Bar widths are measured with
+// the wheel encoders (distance), so the car's speed doesn't affect the read.
+// Decoded barcodes are collected with ir_get_barcode() (see main.c).
 // Motors are driven through the MotorController passed to ir_update()
 // (M1 = left wheel, M2 = right wheel).
 
@@ -49,9 +52,29 @@
 #define CENTRE_BLACK       2500
 
 // Barcode sensor black/white thresholds with hysteresis (ADC 0..4095).
-// Measure the RIGHT sensor's own white/black values and set these between them.
-#define BARCODE_BLACK_ON   1500   // becomes black above this
-#define BARCODE_BLACK_OFF   900   // becomes white below this
+// Measure the RIGHT sensor's own white/black values with RUN_BARCODE_TEST in
+// main.c (it prints min/max) and set these between them, e.g. ON at 60% and
+// OFF at 40% of the way from white to black.
+// From the test log: white paper ~200, black bars up to ~3900, but the narrow
+// white spaces only dip to ~1000-2000 because the sensor's spot is wider than
+// 3 mm. So the white threshold must sit well above 900.
+#define BARCODE_BLACK_ON   2000   // becomes black above this (thin bars only reach ~2000-2500)
+#define BARCODE_BLACK_OFF  1500   // becomes white below this
+
+// 1 = after each barcode, print all its widths on one line.
+// Nothing is printed WHILE a barcode is being read: printing (especially over
+// Wi-Fi) pauses the code for ~20-30 ms and would distort the widths.
+#define BARCODE_DEBUG      1
+
+// Bar widths are recorded both as wheel distance (encoders) and as time.
+// Distance is used when the encoders actually moved during the barcode (speed
+// doesn't matter then); otherwise it falls back to time automatically.
+// The barcode must cover at least this distance for distance to be trusted.
+#define BARCODE_MIN_ENCODER_MM   60.0f
+
+// A colour change only counts if it lasts this many samples (5 x 0.2 ms = 1 ms).
+// Stops dust or print specks from adding extra bars.
+#define BARCODE_DEBOUNCE_SAMPLES 5
 
 // Which side of the line the GP3 sensor sits on: 1 = right, -1 = left.
 // Test: hold the robot so ONLY GP3 is over the line. The wheels must turn the
@@ -82,6 +105,10 @@
 #define SIDE_CONFIRM_US    30000
 
 #define JUNCTION_SPEED     30
+// A real crossing line passes under ALL three sensors, so the centre sensor
+// must also be on solid black. At a barcode the centre stays on the line edge
+// (~0.5), so a barcode can't be mistaken for a junction.
+#define JUNCTION_MIN_POS   0.8f
 #define JUNCTION_CLEAR_US  40000   // both outer sensors white this long = junction crossed
 // A crossing strip of tape is crossed within this distance (measured with the
 // wheel encoders, so it works at any speed). Black for longer = not tape
@@ -105,13 +132,24 @@
 #define LINE_PERIOD_US     5000   // line-following update every 5 ms
 #define BARCODE_SAMPLE_US  200    // barcode sampled every 0.2 ms
 
-// A barcode is considered finished after this long on white.
-// Increase it if the robot moves slowly and barcodes get cut off.
-#define BARCODE_END_US     300000
+// A barcode is finished after this much white following the last bar, AND
+// the white must also be longer than 4 x the widest element seen so far
+// (measured in time), so a slow pass isn't cut off at a wide space.
+#define BARCODE_END_US     300000    // at least 300 ms
+#define BARCODE_END_FACTOR 4
+// Any single bar or space longer than this isn't part of a barcode (the car was
+// stopped or lifted), so the scan is thrown away and starts fresh.
+#define BARCODE_MAX_ELEMENT_US 1500000
+// Backup: give up on a barcode if no new bar arrives for this long
+// (e.g. the car stopped on top of it).
+#define BARCODE_TIMEOUT_US 4000000
 #define MAX_ELEMENTS       200    // bars + spaces, enough for ~20 characters
 
 // Right sensor state, updated by barcode_sample() and also used for junctions.
 static bool bar_black = false;
+static bool scanning = false;           // true while a barcode is being read
+static int n_elements = 0;              // bars + spaces recorded so far
+static uint64_t last_edge_us = 0;       // time of the last barcode edge
 
 // ============================================================
 // Line following
@@ -175,7 +213,7 @@ static void line_follow_step(MotorController *mc, uint64_t now) {
     prev_err = err;
 
     // Both outer sensors on black at once = a line crossing the track.
-    if (line_state == LINE_FOLLOW && side_black && right_black) {
+    if (line_state == LINE_FOLLOW && side_black && right_black && pos > JUNCTION_MIN_POS) {
         line_state = LINE_JUNCTION;
         junction_clear_since = 0;
         junction_start_us = now;
@@ -264,7 +302,12 @@ static void line_follow_step(MotorController *mc, uint64_t now) {
         }
 
         // Backstop: side sensor on the line for a while -> steer hard back.
-        if (side_black) {
+        // While a barcode is being read and the centre is still on the line,
+        // GP3 seeing black is the barcode, not the line, so ignore it.
+        // Only while a real barcode is under way (a few bars seen, recent edge).
+        bool side_is_barcode = scanning && n_elements >= 2 &&
+                               (now - last_edge_us) < 500000 && pos > 0.3f;
+        if (side_black && !side_is_barcode) {
             if (side_black_since == 0) side_black_since = now;
             if (now - side_black_since > SIDE_CONFIRM_US) {
                 steer = SIDE_SENSOR_SIDE * SIDE_STEER;
@@ -289,8 +332,10 @@ static void line_follow_step(MotorController *mc, uint64_t now) {
             all_white_since = 0;
         }
 
-        // Slow down in proportion to how hard it's turning.
-        target_forward = BASE_SPEED - SLOW_IN_TURNS * fabsf(steer);
+        // Slow down in proportion to how hard it's turning, except while a
+        // barcode is being read: then hold a steady speed so time-based widths
+        // stay accurate if the encoders can't be used.
+        target_forward = scanning ? BASE_SPEED : BASE_SPEED - SLOW_IN_TURNS * fabsf(steer);
         break;
     }
 
@@ -318,10 +363,26 @@ static const struct { char c; uint16_t pattern; } CODE39[] = {
     {'$', 0b010101000}, {'/', 0b010100010}, {'+', 0b010001010}, {'%', 0b000101010},
 };
 
-static uint32_t widths[MAX_ELEMENTS];   // duration of each bar/space in microseconds
-static int n_elements = 0;
-static bool scanning = false;
-static uint64_t last_edge_us = 0;
+static uint32_t widths[MAX_ELEMENTS];   // widths used for decoding (copied from one of the two below)
+static uint32_t widths_um[MAX_ELEMENTS]; // each bar/space as wheel distance, micrometres
+static uint32_t widths_us[MAX_ELEMENTS]; // each bar/space as time, microseconds
+static uint32_t last_edge_pos = 0;      // wheel distance at the last edge (micrometres)
+static int pending_samples = 0;         // samples the new colour has lasted so far
+static uint32_t pending_pos = 0;        // where the new colour started
+static uint64_t pending_us = 0;
+static uint16_t right_raw = 0;          // latest raw reading, for the test mode
+static uint16_t elem_min = 4095, elem_max = 0;   // darkest/lightest reading in the current element
+static uint16_t weakest_bar = 4095;     // lowest "darkest" reading of any bar in this barcode
+static uint16_t weakest_space = 0;      // highest "lightest" reading of any space in this barcode
+static uint32_t widest = 0;             // widest element so far in this barcode (time)
+
+static char last_barcode[24];
+static bool barcode_ready = false;
+
+// Current wheel distance in micrometres, for measuring widths.
+static uint32_t barcode_pos(MotorController *mc) {
+    return (uint32_t)(travelled_mm(mc) * 1000.0f);
+}
 
 // Decodes 9 element widths into a character, or returns 0 if invalid.
 static char decode_char(const uint32_t e[9]) {
@@ -374,40 +435,119 @@ static bool decode_barcode(bool reverse, char *out, size_t out_size) {
 
 static void barcode_finished(void) {
     char text[32];
-    // Try both directions so barcodes can be read either way round.
-    if (decode_barcode(false, text, sizeof(text)) ||
-        decode_barcode(true, text, sizeof(text))) {
-        printf("BARCODE: %s\n", text);
+    uint64_t total_um = 0;
+    for (int i = 0; i < n_elements; i++) total_um += widths_um[i];
+
+#if BARCODE_DEBUG
+    // One summary line per barcode, printed after reading has finished.
+    char line[12 * MAX_ELEMENTS / 2 + 200];
+    int len = snprintf(line, sizeof(line), "barcode: %d elements, encoders %.0f mm, weakest bar %u / space %u | ms:",
+                       n_elements, total_um / 1000.0f, weakest_bar, weakest_space);
+    for (int i = 0; i < n_elements && len < (int)sizeof(line) - 8; i++)
+        len += snprintf(line + len, sizeof(line) - len, " %.0f", widths_us[i] / 1000.0f);
+    len += snprintf(line + len, sizeof(line) - len, " | mm:");
+    for (int i = 0; i < n_elements && len < (int)sizeof(line) - 8; i++)
+        len += snprintf(line + len, sizeof(line) - len, " %.1f", widths_um[i] / 1000.0f);
+    printf("%s\n", line);
+#endif
+
+    // Try wheel distance first (if the encoders moved enough), then time.
+    // Each is tried in both directions so barcodes read either way round.
+    bool ok = false;
+    const char *used = "";
+    for (int attempt = 0; attempt < 2 && !ok; attempt++) {
+        bool distance = (attempt == 0);
+        if (distance && total_um < (uint64_t)(BARCODE_MIN_ENCODER_MM * 1000.0f)) continue;
+        for (int i = 0; i < n_elements; i++) widths[i] = distance ? widths_um[i] : widths_us[i];
+        if (decode_barcode(false, text, sizeof(text)) || decode_barcode(true, text, sizeof(text))) {
+            ok = true;
+            used = distance ? "distance" : "time";
+        }
+    }
+
+    if (ok) {
+        strncpy(last_barcode, text, sizeof(last_barcode) - 1);
+        last_barcode[sizeof(last_barcode) - 1] = '\0';
+        barcode_ready = true;                  // collected by ir_get_barcode()
+#if BARCODE_DEBUG
+        printf("decoded using %s\n", used);
+#endif
     } else if (n_elements >= 9) {
         printf("Barcode read failed (%d elements)\n", n_elements);
     }
     // Fewer than 9 elements = just a stray black mark, ignore quietly.
 }
 
-static void barcode_sample(uint64_t now) {
+static void barcode_sample(MotorController *mc, uint64_t now) {
     adc_select_input(BARCODE_ADC_CH);
     uint16_t v = adc_read();
+    right_raw = v;
+    if (v < elem_min) elem_min = v;
+    if (v > elem_max) elem_max = v;
 
-    bool black = bar_black;
-    if (!bar_black && v > BARCODE_BLACK_ON) black = true;
-    else if (bar_black && v < BARCODE_BLACK_OFF) black = false;
+    // What the sensor sees right now, with hysteresis around the current colour.
+    bool raw_black = bar_black ? (v >= BARCODE_BLACK_OFF) : (v > BARCODE_BLACK_ON);
 
-    if (black != bar_black) {
-        if (scanning) {
-            if (n_elements < MAX_ELEMENTS) {
-                widths[n_elements++] = (uint32_t)(now - last_edge_us);
-            }
-        } else if (black) {
-            // First bar of a new barcode
-            scanning = true;
-            n_elements = 0;
+    if (raw_black != bar_black) {
+        // Possible edge: remember where it started, accept it once it has lasted.
+        if (pending_samples == 0) {
+            pending_pos = barcode_pos(mc);
+            pending_us = now;
         }
-        last_edge_us = now;
-        bar_black = black;
-    } else if (scanning && !black && now - last_edge_us > BARCODE_END_US) {
-        // Long white after the last bar -> barcode finished
-        scanning = false;
-        barcode_finished();
+        if (++pending_samples >= BARCODE_DEBOUNCE_SAMPLES) {
+            pending_samples = 0;
+            if (scanning) {
+                uint32_t w_um = pending_pos - last_edge_pos;
+                uint32_t w_us = (uint32_t)(pending_us - last_edge_us);
+                if (w_us > BARCODE_MAX_ELEMENT_US) {
+                    // Far too long to be a bar or space -> throw this scan away.
+                    // If we've just reached black, that's the start of a new barcode.
+                    scanning = raw_black;
+                    n_elements = 0;
+                    widest = 0;
+                    weakest_bar = 4095;
+                    weakest_space = 0;
+                } else {
+                    if (n_elements < MAX_ELEMENTS) {
+                        widths_um[n_elements] = w_um;
+                        widths_us[n_elements] = w_us;
+                        n_elements++;
+                    }
+                    if (w_us > widest) widest = w_us;
+                    // bar_black is still the colour of the element that just ended
+                    if (bar_black && elem_max < weakest_bar) weakest_bar = elem_max;
+                    if (!bar_black && elem_min > weakest_space) weakest_space = elem_min;
+                }
+            } else if (raw_black) {
+                // First bar of a new barcode
+                scanning = true;
+                n_elements = 0;
+                widest = 0;
+                weakest_bar = 4095;
+                weakest_space = 0;
+            }
+            elem_min = 4095;
+            elem_max = 0;
+            last_edge_pos = pending_pos;
+            last_edge_us = pending_us;
+            bar_black = raw_black;
+        }
+        return;
+    }
+    pending_samples = 0;   // colour didn't last -> it was a speck, ignore it
+
+    if (scanning && !bar_black) {
+        uint64_t gap = now - last_edge_us;
+        uint64_t needed = (uint64_t)BARCODE_END_FACTOR * widest;
+        if (needed < BARCODE_END_US) needed = BARCODE_END_US;
+        if (needed > 1000000) needed = 1000000;   // never wait more than 1 s of white
+        bool gap_done = gap > needed;
+        bool timed_out = now - last_edge_us > BARCODE_TIMEOUT_US;
+        if (gap_done || timed_out) {
+            // Enough white after the last bar -> barcode finished
+            scanning = false;
+            barcode_finished();
+        }
     }
 }
 
@@ -430,11 +570,31 @@ void ir_init(void) {
 void ir_update(MotorController *mc) {
     uint64_t now = time_us_64();
     if (now >= next_barcode_us) {
-        barcode_sample(now);
+        barcode_sample(mc, now);
         next_barcode_us = now + BARCODE_SAMPLE_US;
     }
     if (now >= next_line_us) {
         line_follow_step(mc, now);
         next_line_us = now + LINE_PERIOD_US;
     }
+}
+
+void ir_barcode_update(MotorController *mc) {
+    uint64_t now = time_us_64();
+    if (now >= next_barcode_us) {
+        barcode_sample(mc, now);
+        next_barcode_us = now + BARCODE_SAMPLE_US;
+    }
+}
+
+bool ir_get_barcode(char *out, size_t size) {
+    if (!barcode_ready || size == 0) return false;
+    strncpy(out, last_barcode, size - 1);
+    out[size - 1] = '\0';
+    barcode_ready = false;
+    return true;
+}
+
+uint16_t ir_barcode_raw(void) {
+    return right_raw;
 }

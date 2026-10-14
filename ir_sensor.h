@@ -1,17 +1,25 @@
-#pragma once
+#ifndef IR_SENSOR_H
+#define IR_SENSOR_H
 
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include "motor_controller.h"
 
-// IR sensors: line following (left + centre sensors) and Code 39 barcode
-// scanning (right sensor). Drives the wheels through a MotorController.
-// Usage:
-//   ir_init();
-//   while (true) ir_update(&motors);
-
-// Configures the IR sensor pins and the ADC. Call once at startup.
+// Sets up the IR sensor pins and the ADC. Call once at start-up.
 void ir_init(void);
 
-// Samples the barcode sensor and, every few milliseconds, steers the motors
-// to follow the line. Decoded barcodes are printed with printf.
-// Non-blocking -- call it as often as possible from the main loop.
+// Line following + barcode scanning. Call as often as possible from the main loop.
 void ir_update(MotorController *mc);
+
+// Barcode scanning only (no line following, motors untouched). For the barcode test.
+void ir_barcode_update(MotorController *mc);
+
+// Returns true once for each newly decoded barcode and copies its text
+// (without the * start/stop characters) into out, e.g. "A".
+bool ir_get_barcode(char *out, size_t size);
+
+// Latest raw reading of the barcode sensor (0..4095), for calibration.
+uint16_t ir_barcode_raw(void);
+
+#endif

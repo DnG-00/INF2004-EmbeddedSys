@@ -47,8 +47,28 @@
 // Set to 1 to run the motor/encoder demo instead of line following.
 #define RUN_MOTOR_DEMO 0
 
+// Set to 1 to test the barcode sensor on its own: motors stay off, push the car
+// over a barcode by hand. Prints the raw sensor value with its min/max (use these
+// to set BARCODE_BLACK_ON/OFF in ir_sensor.c) and every decoded barcode.
+#define RUN_BARCODE_TEST 0
+
+// Set to 1 to test barcode reading with the car really driving, but WITHOUT
+// line following: after the start-up delay the car drives straight at a steady
+// speed for DRIVE_TEST_MS, stops, and prints what it read. Press RESET to repeat.
+// Line the car up so the right sensor will pass over the bars.
+// Set all RUN_ options to 0 for normal line following.
+#define RUN_BARCODE_DRIVE_TEST 1
+#define DRIVE_TEST_SPEED       25      // percent; too low (e.g. 15) makes the motors stall and lurch
+#define DRIVE_TEST_MS          2500    // how long to drive; shorten if it runs off the mat
+
 // Drives through forward/backward/turn/spin moves forever, printing encoder readings.
 static void run_motor_demo(MotorController *mc);
+
+// Barcode sensor test with the motors off.
+static void run_barcode_test(MotorController *mc);
+
+// Barcode test driving straight at a steady speed, no line following.
+static void run_barcode_drive_test(MotorController *mc);
 
 int main() {
     stdio_init_all();
@@ -78,12 +98,50 @@ int main() {
 
 #if RUN_MOTOR_DEMO
     run_motor_demo(&motors);
+#elif RUN_BARCODE_TEST
+    run_barcode_test(&motors);
+#elif RUN_BARCODE_DRIVE_TEST
+    run_barcode_drive_test(&motors);
 #else
     printf("Starting line following + barcode scanning\n");
+    char code[24];
     while (true) {
         ir_update(&motors);
+
+        if (ir_get_barcode(code, sizeof(code))) {
+            printf("BARCODE: %s\n", code);
+            // TODO (Vehicle controller): turn the barcode into a navigation
+            // command here once the team agrees what each letter means.
+        }
     }
 #endif
+}
+
+static void run_barcode_test(MotorController *mc) {
+    mc_stop(mc);
+    printf("Barcode test: push the car over a barcode by hand\n");
+
+    uint16_t lowest = 4095, highest = 0;
+    uint64_t next_print = 0;
+    char code[24];
+
+    while (true) {
+        ir_barcode_update(mc);
+
+        uint16_t v = ir_barcode_raw();
+        if (v < lowest) lowest = v;
+        if (v > highest) highest = v;
+
+        uint64_t now = time_us_64();
+        if (now >= next_print) {   // 5 lines a second is enough to read
+            printf("right sensor raw=%4u   min=%4u   max=%4u\n", v, lowest, highest);
+            next_print = now + 200000;
+        }
+
+        if (ir_get_barcode(code, sizeof(code))) {
+            printf(">>> BARCODE: %s\n", code);
+        }
+    }
 }
 
 static void run_motor_demo(MotorController *mc) {
@@ -147,4 +205,34 @@ static void run_motor_demo(MotorController *mc) {
 
         sleep_ms(3000);
     }
+}
+
+static void run_barcode_drive_test(MotorController *mc) {
+    char code[24];
+    bool got = false;
+
+    printf("Barcode drive test: driving straight for %d ms\n", DRIVE_TEST_MS);
+    mc_set_wheel_speeds(mc, DRIVE_TEST_SPEED, DRIVE_TEST_SPEED);
+
+    // Drive and read. Nothing is printed until the car has stopped, so the
+    // timing of the bars isn't disturbed.
+    uint64_t stop_at = time_us_64() + (uint64_t)DRIVE_TEST_MS * 1000;
+    while (time_us_64() < stop_at) {
+        ir_barcode_update(mc);
+        if (!got && ir_get_barcode(code, sizeof(code))) got = true;
+    }
+    mc_stop(mc);
+
+    // Keep reading briefly in case the barcode ended right as the car stopped.
+    uint64_t wait_until = time_us_64() + 1500000;
+    while (time_us_64() < wait_until) {
+        ir_barcode_update(mc);
+        if (!got && ir_get_barcode(code, sizeof(code))) got = true;
+    }
+
+    if (got) printf(">>> BARCODE: %s\n", code);
+    else     printf(">>> no barcode decoded (see the barcode: line above, if any)\n");
+    printf("Done. Press RESET to run again.\n");
+
+    while (true) sleep_ms(1000);
 }
