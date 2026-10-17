@@ -45,7 +45,7 @@ pico_sdk_init()
 
 add_executable(RoboPico
         main.c
-        motor_controller.c
+        motor.c
         ir_sensor.c
         wifi_log.c
         )
@@ -79,8 +79,8 @@ pico_add_extra_outputs(RoboPico)
 
 # CMakeList.txt for testing the encoder and motor controller code.
 # add_executable(EncoderTest
-#         encoder_test.c
-#         motor_controller.c
+#         encoder_test_main.c
+#         motor.c
 #         )
 
 # pico_set_program_name(EncoderTest "EncoderTest")

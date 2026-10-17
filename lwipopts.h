@@ -1,10 +1,17 @@
-// FOR TESTING PURPOSES ONLY, TO REPLACE LATER
+/** @file lwipopts.h
+ *
+ * @brief Minimal lwIP configuration for wireless debug logging over UDP and
+ *        DHCP.
+ *
+ * lwIP includes this file by name, so it has no matching source file. TCP and
+ * sockets are switched off since this project doesn't need them, keeping
+ * lwIP's footprint and configuration small.
+ *
+ * FOR TESTING PURPOSES ONLY, TO REPLACE LATER.
+ */
 
-#pragma once
-
-// Minimal lwIP config for wireless debug logging over UDP + DHCP.
-// TCP/sockets are switched off since this project doesn't need them --
-// keeping lwIP's footprint and config surface small.
+#ifndef LWIPOPTS_H
+#define LWIPOPTS_H
 
 #define NO_SYS                      1
 #define LWIP_SOCKET                 0
@@ -12,11 +19,12 @@
 
 #define MEM_LIBC_MALLOC             0
 #define MEM_ALIGNMENT               4
+
 // wifi_log.c allocates a PBUF_RAM per printed line; under bursty printing
 // several can be in flight (queued for transmit) at once before the driver
 // frees them, so this needs real headroom -- too small and pbuf_alloc()
-// silently fails and that line is just dropped. RP2040 has 264KB SRAM, so
-// this is cheap.
+// silently fails and that line is just dropped. The RP2040 has 264 KB SRAM,
+// so this is cheap.
 #define MEM_SIZE                    16000
 
 #define LWIP_ARP                    1
@@ -43,3 +51,8 @@
 
 // Needed by cyw43_arch when lwIP is built without an RTOS.
 #define LWIP_PROVIDE_ERRNO          1
+
+#endif /* LWIPOPTS_H */
+
+/*** end of file ***/
+
