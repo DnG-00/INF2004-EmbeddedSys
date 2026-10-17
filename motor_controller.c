@@ -116,6 +116,7 @@ void mc_init(MotorController *mc,
     s_pwm_wrap = (uint16_t)((total_count / s_pwm_clkdiv) + 0.5f) - 1;
     
     // Initialize the MotorController instance with the given motor pins
+    mc->m1_a_pin = m1_a_pin;
     mc->m1_b_pin = m1_b_pin;
     mc->m2_a_pin = m2_a_pin;
     mc->m2_b_pin = m2_b_pin;
