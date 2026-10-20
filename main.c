@@ -40,13 +40,13 @@
 // Run wifi_log_listener.py on that PC to see this program's output over
 // Wi-Fi.
 #ifndef WIFI_SSID
-#define WIFI_SSID               ""
+#define WIFI_SSID               "pawtaetoe wifi"
 #endif
 #ifndef WIFI_PASSWORD
-#define WIFI_PASSWORD           ""
+#define WIFI_PASSWORD           "q8znpa5zf4hdgr7"
 #endif
 #ifndef LOG_SERVER_IP
-#define LOG_SERVER_IP           ""
+#define LOG_SERVER_IP           "10.161.217.88"
 #endif
 #ifndef LOG_SERVER_PORT
 #define LOG_SERVER_PORT         4210
@@ -57,7 +57,7 @@
 
 // Set to 1 to test the barcode sensor on its own: motors stay off, push the
 // car over a barcode by hand. Prints the raw sensor value with its min/max
-// (use these to set BARCODE_BLACK_ON/OFF in ir_sensor.c) and every decoded
+// (use these to set BARCODE_EDGE_DELTA in ir_sensor.c) and every decoded
 // barcode.
 #define RUN_BARCODE_TEST        0
 
@@ -69,7 +69,7 @@
 #define RUN_BARCODE_DRIVE_TEST  1
 
 // Percent; too low (e.g. 15) makes the motors stall and lurch.
-#define DRIVE_TEST_SPEED        25
+#define DRIVE_TEST_SPEED        30
 
 // How long to drive; shorten it if the car runs off the mat.
 #define DRIVE_TEST_MS           3000U
