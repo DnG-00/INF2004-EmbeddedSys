@@ -69,15 +69,25 @@
 #define CENTRE_BLACK             2500.0f
 #define CENTRE_SAMPLES           4U     // readings averaged per update
 
-// Barcode sensor black/white thresholds with hysteresis (ADC 0..4095).
-// Measure the RIGHT sensor's own white/black values with RUN_BARCODE_TEST in
-// main.c (it prints min/max) and set these between them, e.g. ON at 60% and
-// OFF at 40% of the way from white to black.
-// From the test log: white paper ~200, black bars up to ~3900, but the narrow
-// white spaces only dip to ~1000-2000 because the sensor's spot is wider than
-// 3 mm. So the white threshold must sit well above 900.
-#define BARCODE_BLACK_ON         2000U  // becomes black above this
-#define BARCODE_BLACK_OFF        1500U  // becomes white below this
+// Barcode edges are found by how far the reading moves, not by fixed
+// black/white levels (ADC 0..4095). On black the sensor tracks the highest
+// reading (peak); once the reading falls BARCODE_EDGE_DELTA below that peak,
+// it has gone white. On white it tracks the lowest reading (dip) and goes
+// black once the reading rises BARCODE_EDGE_DELTA above it.
+// Why: white paper reads ~200 and bars up to ~3900, but narrow white spaces
+// only dip to ~1000-2000 because the sensor's spot is wider than 3 mm. A
+// fixed white level misses them; a dip of several hundred counts does not.
+//   Too high -> shallow narrow spaces are missed again (bars merge)
+//   Too low  -> print specks and noise add extra bars
+// Measure with RUN_BARCODE_TEST in main.c (it prints min/max).
+#define BARCODE_EDGE_DELTA       500U
+
+// The edge is timed where the reading crossed half of BARCODE_EDGE_DELTA,
+// which is nearer the real edge than where the full move completed.
+#define BARCODE_EDGE_HALF        (BARCODE_EDGE_DELTA / 2U)
+
+// Only used once, at start-up, to pick the colour the sensor starts on.
+#define BARCODE_START_BLACK      1750U
 #define ADC_MAX_READING          4095U
 
 // 1 = after each barcode, print all its widths on one line.
@@ -100,7 +110,7 @@
 
 // ---------------- Line following tuning ----------------
 // Motor speeds in percent (0..100). Tune slowly first, then speed up.
-#define BASE_SPEED               35.0f
+#define BASE_SPEED               30.0f
 #define MAX_SPEED_PCT            100.0f
 
 // Steering = KP * error + KD * rate_of_change_of_error.
@@ -205,7 +215,13 @@
 // Code 39 layout: each character is 9 elements (bar, space, ... bar), 3 of
 // them wide, and characters are separated by a 1-element gap.
 #define CODE39_CHAR_ELEMENTS     9U
-#define CODE39_NARROW_ELEMENTS   6U
+#define CODE39_CHAR_BARS         5U     // elements 0, 2, 4, 6, 8
+#define CODE39_CHAR_SPACES       4U     // elements 1, 3, 5, 7
+
+// Most characters have 2 wide bars and 1 wide space; $ / + % have no wide
+// bars and 3 wide spaces. If the widest bar is less than this many times the
+// narrowest, the bars are taken to be all narrow.
+#define CODE39_WIDE_BAR_RATIO    2U
 #define CODE39_CHAR_PITCH        10U    // 9 elements + 1 gap
 #define CODE39_MIN_CHARS         3U     // start '*' + data + stop '*'
 #define CODE39_FRAME_CHARS       2U     // the start and stop '*'
@@ -329,6 +345,11 @@ static uint32_t  g_last_edge_pos      = 0U;     // odometer at the last edge
 static uint32_t  g_pending_samples    = 0U;     // samples a new colour lasted
 static uint32_t  g_pending_pos        = 0U;     // where the new colour began
 static uint32_t  g_pending_us         = 0U;
+static bool      g_b_pending_crossed  = false;  // g_pending_pos/us are set
+
+// Highest reading since the bar began (on black), or lowest since the space
+// began (on white). Edges are measured from here.
+static uint32_t  g_extreme            = 0U;
 
 // Darkest and lightest readings in the current element.
 static uint32_t  g_element_min        = ADC_MAX_READING;
@@ -380,6 +401,8 @@ static void      follow_line (line_reading_t const * p_reading,
                               uint64_t now_us,
                               float32_t * p_target_forward,
                               float32_t * p_steer);
+static void      sort_by_width (uint32_t const p_elements[], uint32_t first,
+                                uint32_t p_order[]);
 static char      decode_char (uint32_t const p_elements[]);
 static bool      decode_barcode (bool b_reverse, char * p_out,
                                  size_t out_size);
@@ -416,6 +439,12 @@ ir_sensor_init (motor_t const * p_motors)
     g_p_motors       = p_motors;
     g_last_m1_pulses = motor_get_m1_total_pulses(p_motors);
     g_last_m2_pulses = motor_get_m2_total_pulses(p_motors);
+
+    // Start from the colour under the sensor now, since edges are only found
+    // relative to the last peak or dip.
+    adc_select_input(BARCODE_ADC_CH);
+    g_extreme     = adc_read();
+    g_b_bar_black = (g_extreme > BARCODE_START_BLACK);
 
     // Negative period = every 0.2 ms from the start of the last call, so the
     // sample rate stays fixed however long the interrupt takes.
@@ -902,44 +931,73 @@ follow_line (line_reading_t const * p_reading, uint64_t now_us,
 }
 
 /*!
+ * @brief Sorts a character's bars or spaces by width, narrowest first.
+ *
+ * @param[in]  p_elements  The character's 9 widths.
+ * @param[in]  first       0 for the 5 bars, 1 for the 4 spaces.
+ * @param[out] p_order     Their element indices, narrowest first.
+ */
+static void
+sort_by_width (uint32_t const p_elements[], uint32_t first,
+               uint32_t p_order[])
+{
+    uint32_t count = 0U;
+
+    for (uint32_t idx = first; idx < CODE39_CHAR_ELEMENTS; idx += 2U)
+    {
+        uint32_t pos = count;
+
+        while ((pos > 0U) && (p_elements[p_order[pos - 1U]] > p_elements[idx]))
+        {
+            p_order[pos] = p_order[pos - 1U];
+            pos--;
+        }
+
+        p_order[pos] = idx;
+        count++;
+    }
+}
+
+/*!
  * @brief Decodes 9 element widths into a character.
+ *
+ * Bars are only compared with bars, and spaces with spaces. The sensor's wide
+ * spot shortens bars and stretches the spaces beside them, so a narrow space
+ * can measure longer than a wide bar (seen in testing: 31 ms narrow spaces
+ * next to 28 ms wide bars).
  *
  * @return The character, or '\0' if the widths don't match one.
  */
 static char
 decode_char (uint32_t const p_elements[])
 {
-    // Sort a copy: the 3 widest elements are wide, the other 6 narrow.
-    uint32_t sorted[CODE39_CHAR_ELEMENTS];
+    uint32_t bars[CODE39_CHAR_BARS];
+    uint32_t spaces[CODE39_CHAR_SPACES];
 
-    memcpy(sorted, p_elements, sizeof(sorted));
+    sort_by_width(p_elements, 0U, bars);
+    sort_by_width(p_elements, 1U, spaces);
 
-    for (uint32_t idx = 0U; idx < CODE39_CHAR_ELEMENTS; idx++)
+    uint32_t narrowest_bar = p_elements[bars[0]];
+    uint32_t widest_bar    = p_elements[bars[CODE39_CHAR_BARS - 1U]];
+    bool     b_wide_bars   = (widest_bar
+                              >= (CODE39_WIDE_BAR_RATIO * narrowest_bar));
+
+    // 2 wide bars + 1 wide space, or no wide bars + 3 wide spaces.
+    uint32_t wide_bars   = b_wide_bars ? 2U : 0U;
+    uint32_t wide_spaces = b_wide_bars ? 1U : 3U;
+    uint32_t pattern     = 0U;
+
+    // Bit 8 is element 0, so element idx is bit (8 - idx).
+    for (uint32_t count = 1U; count <= wide_bars; count++)
     {
-        uint32_t value = sorted[idx];
-        uint32_t pos   = idx;
-
-        while ((pos > 0U) && (sorted[pos - 1U] > value))
-        {
-            sorted[pos] = sorted[pos - 1U];
-            pos--;
-        }
-
-        sorted[pos] = value;
+        pattern |= 1U << (CODE39_CHAR_ELEMENTS - 1U
+                          - bars[CODE39_CHAR_BARS - count]);
     }
 
-    uint32_t threshold = (sorted[CODE39_NARROW_ELEMENTS - 1U]
-                          + sorted[CODE39_NARROW_ELEMENTS]) / 2U;
-    uint32_t pattern   = 0U;
-
-    for (uint32_t idx = 0U; idx < CODE39_CHAR_ELEMENTS; idx++)
+    for (uint32_t count = 1U; count <= wide_spaces; count++)
     {
-        pattern <<= 1U;
-
-        if (p_elements[idx] > threshold)
-        {
-            pattern |= 1U;
-        }
+        pattern |= 1U << (CODE39_CHAR_ELEMENTS - 1U
+                          - spaces[CODE39_CHAR_SPACES - count]);
     }
 
     char result = '\0';
@@ -1325,31 +1383,54 @@ sample_barcode (uint32_t now_us)
         g_element_max = reading;
     }
 
-    // What the sensor sees right now, with hysteresis around the current
-    // colour.
-    bool b_raw_black = g_b_bar_black ? (reading >= BARCODE_BLACK_OFF)
-                                     : (reading > BARCODE_BLACK_ON);
+    // How far the reading has moved back from this colour's peak (on black)
+    // or dip (on white), towards the other colour.
+    uint32_t moved = 0U;
 
-    if (b_raw_black != g_b_bar_black)
+    if (g_b_bar_black ? (reading > g_extreme) : (reading < g_extreme))
     {
-        // Possible edge: remember where it started, accept it once it has
-        // lasted.
-        if (0U == g_pending_samples)
-        {
-            g_pending_pos = g_odometer;
-            g_pending_us  = now_us;
-        }
+        // Still getting darker on a bar / lighter on a space.
+        g_extreme = reading;
+    }
+    else
+    {
+        moved = g_b_bar_black ? (g_extreme - reading) : (reading - g_extreme);
+    }
 
+    if (moved < BARCODE_EDGE_HALF)
+    {
+        // Back near the peak or dip: any half-made edge was noise.
+        g_b_pending_crossed = false;
+    }
+    else if (!g_b_pending_crossed)
+    {
+        // Halfway to an edge: time the edge from here if it completes.
+        g_b_pending_crossed = true;
+        g_pending_pos       = g_odometer;
+        g_pending_us        = now_us;
+    }
+    else
+    {
+        // Already past halfway; keep the first crossing.
+    }
+
+    if (moved >= BARCODE_EDGE_DELTA)
+    {
+        // Possible edge: accept it once it has lasted.
         g_pending_samples++;
 
         if (g_pending_samples >= BARCODE_DEBOUNCE_SAMPLES)
         {
-            accept_barcode_edge(b_raw_black);
+            accept_barcode_edge(!g_b_bar_black);
+
+            // The new colour's peak or dip is measured from here.
+            g_extreme           = reading;
+            g_b_pending_crossed = false;
         }
     }
     else
     {
-        // The colour didn't last -> it was a speck, ignore it.
+        // The move didn't last -> it was a speck, ignore it.
         g_pending_samples = 0U;
         check_barcode_end(now_us);
     }

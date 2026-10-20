@@ -58,7 +58,7 @@
 
 // Set to 1 to test the barcode sensor on its own: motors stay off, push the
 // car over a barcode by hand. Prints the raw sensor value with its min/max
-// (use these to set BARCODE_BLACK_ON/OFF in ir_sensor.c) and every decoded
+// (use these to set BARCODE_EDGE_DELTA in ir_sensor.c) and every decoded
 // barcode.
 #define RUN_BARCODE_TEST        0
 
@@ -70,7 +70,7 @@
 #define RUN_BARCODE_DRIVE_TEST  1
 
 // Percent; too low (e.g. 15) makes the motors stall and lurch.
-#define DRIVE_TEST_SPEED        25
+#define DRIVE_TEST_SPEED        30
 
 // How long to drive; shorten it if the car runs off the mat.
 #define DRIVE_TEST_MS           3000U
