@@ -30,8 +30,7 @@ set(PICO_BOARD pico_w CACHE STRING "Board type")
 # command line (or via the CMake Tools UI) rather than editing source.
 set(WIFI_SSID "" CACHE STRING "Wi-Fi SSID for wireless debug logging")
 set(WIFI_PASSWORD "" CACHE STRING "Wi-Fi password for wireless debug logging")
-set(LOG_SERVER_IP "" CACHE STRING "IP address of the PC running wifi_log_listener.py")
-set(LOG_SERVER_PORT "4210" CACHE STRING "UDP port wifi_log_listener.py listens on")
+set(MQTT_BROKER_IP "" CACHE STRING "MQTT Broker IP for wireless debug logging")
 
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
@@ -48,8 +47,8 @@ add_executable(RoboPico
         motor.c
         ir_sensor.c
         wifi_log.c
+        mqtt_client.c
         )
-
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(RoboPico 0)
@@ -58,8 +57,7 @@ pico_enable_stdio_usb(RoboPico 1)
 target_compile_definitions(RoboPico PRIVATE
         WIFI_SSID="${WIFI_SSID}"
         WIFI_PASSWORD="${WIFI_PASSWORD}"
-        LOG_SERVER_IP="${LOG_SERVER_IP}"
-        LOG_SERVER_PORT=${LOG_SERVER_PORT}
+        MQTT_BROKER_IP="${MQTT_BROKER_IP}"
         )
 
 # Add the standard library to the build
@@ -68,6 +66,7 @@ target_link_libraries(RoboPico
         hardware_pwm
         hardware_adc
         pico_cyw43_arch_lwip_threadsafe_background
+        pico_lwip_mqtt
         )
 
 # Add the standard include files to the build
@@ -77,26 +76,4 @@ target_include_directories(RoboPico PRIVATE
 
 pico_add_extra_outputs(RoboPico)
 
-# CMakeList.txt for testing the encoder and motor controller code.
-# add_executable(EncoderTest
-#         encoder_test_main.c
-#         motor.c
-#         )
-
-# pico_set_program_name(EncoderTest "EncoderTest")
-# pico_set_program_version(EncoderTest "0.1")
-
-# pico_enable_stdio_uart(EncoderTest 0)
-# pico_enable_stdio_usb(EncoderTest 1)
-
-# target_link_libraries(EncoderTest
-#         pico_stdlib
-#         hardware_pwm
-#         )
-
-# target_include_directories(EncoderTest PRIVATE
-#         ${CMAKE_CURRENT_LIST_DIR}
-# )
-
-# pico_add_extra_outputs(EncoderTest)
 

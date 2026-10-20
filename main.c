@@ -12,6 +12,12 @@
 #include "motor.h"
 #include "ir_sensor.h"
 #include "wifi_log.h"
+#include "pico/cyw43_arch.h"// C's library that supports PICO W's in-built WIFI
+#include "lwipopts.h"
+#include "lwip/apps/mqtt.h"
+#include "lwip/ip_addr.h"
+#include "mqtt_client.h" 
+#include "mqtt_topics.h" // Header file that contains topics where devices can publish & subscribe
 
 // Motor pin assignments for the Robo Pico's built-in motor driver terminals.
 // Change these if the motor wiring on the board changes.
@@ -33,23 +39,18 @@
 // Wheel diameter in millimetres. Change this if different wheels are used.
 #define WHEEL_DIAMETER_MM       62.0f
 
-// FOR TESTING PURPOSES ONLY, TO REPLACE LATER
-// cmake -S . -B build -DWIFI_SSID="YourNetworkName"
-//       -DWIFI_PASSWORD="YourNetworkPassword" -DLOG_SERVER_IP="192.168.x.x"
-// cmake --build build
-// Run wifi_log_listener.py on that PC to see this program's output over
-// Wi-Fi.
+// MQTT Broker's credentials
+#ifndef MQTT_BROKER_IP
+#define MQTT_BROKER_IP ""
+#endif
+#define MQTT_BROKER_PORT 1883
+
+// WIFI's credentials
 #ifndef WIFI_SSID
-#define WIFI_SSID               ""
+#define WIFI_SSID ""
 #endif
 #ifndef WIFI_PASSWORD
-#define WIFI_PASSWORD           ""
-#endif
-#ifndef LOG_SERVER_IP
-#define LOG_SERVER_IP           ""
-#endif
-#ifndef LOG_SERVER_PORT
-#define LOG_SERVER_PORT         4210
+#define WIFI_PASSWORD ""
 #endif
 
 // Set to 1 to run the motor/encoder demo instead of line following.
@@ -117,18 +118,28 @@ main (void)
 {
     stdio_init_all();
 
-    // FOR TESTING PURPOSES ONLY, TO REPLACE LATER
-    if (strlen(WIFI_SSID) > 0U)
-    {
-        if (wifi_log_init(WIFI_SSID, WIFI_PASSWORD, LOG_SERVER_IP,
-                          LOG_SERVER_PORT))
-        {
-            printf("Wi-Fi log connected, sending to %s:%d\n", LOG_SERVER_IP,
-                   LOG_SERVER_PORT);
-        }
-        else
-        {
-            printf("Wi-Fi log failed to connect, continuing on USB only\n");
+    while (!stdio_usb_connected()) {
+        printf("The USB is not connected to the PICO W\n");
+        sleep_ms(100);
+    }
+
+    printf("The USB is connected to the PICO W\n");
+    sleep_ms(3000); 
+
+    bool wifi_connect_result = wifi_init();
+
+    while (true) {
+
+        if (wifi_connect_result) {
+            printf("Hello from PICO W via WIFI!\n");
+            cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
+            sleep_ms(1000);
+        } else {
+            printf("Goodbye!\n");
+            cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
+            sleep_ms(1000);
+            cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
+            sleep_ms(1000);
         }
     }
 
